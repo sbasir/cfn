@@ -470,13 +470,11 @@ cfn.delete = function (name) {
   return new Cfn(name).delete()
 }
 
-cfn.validate = function (region, template, params) {
+cfn.validate = function (awsConfig, template, params) {
   return new Cfn({
     template: template,
     params: params,
-    awsConfig: {
-      region: region
-    }
+    awsConfig: awsConfig
   }).validate()
 }
 
