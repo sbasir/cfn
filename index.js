@@ -160,8 +160,8 @@ function Cfn (name, template) {
         const status = lastEvent.ResourceStatus
         const statusReason = lastEvent.ResourceStatusReason
 
-                // Only fail/succeed on cloud formation stack resource
-        if (resourceType === 'AWS::CloudFormation::Stack') {
+                // Only fail/succeed on cloud formation stack resource, check for name for Nested Stacks
+        if (resourceType === 'AWS::CloudFormation::Stack' && lastEvent.LogicalResourceId === name) {
                     // if cf stack status indicates failure AND the failed event occurred during this update, notify of failure
                     // if cf stack status indicates success, OR it failed before this current update, notify of success
           if (_.includes(failed, status) && (timestamp >= startedAt)) {
@@ -318,7 +318,7 @@ function Cfn (name, template) {
     return promise
   }
 
- function isUriTemplate (template) {
+  function isUriTemplate (template) {
     const httpsUri = /https:\/\/s3\.amazonaws.com/
     return httpsUri.test(template)
   }
