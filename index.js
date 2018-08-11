@@ -232,17 +232,118 @@ function Cfn (name, template) {
     })
   }
 
+  function checkChangeStack (action, name, changeSetName) {
+    const logPrefix = name + ' ' + action.toUpperCase()
+    const notExists = /ValidationError:\s+Stack\s+\[?.+]?\s+does not exist/
+    const throttling = /Throttling:\s+Rate\s+exceeded/
+    let displayedChangeSet = {}
+
+    return new Promise(function (resolve, reject) {
+      let interval
+      let running = false
+
+      // on success:
+      // 1. clear interval
+      // 2. return resolved promise
+      function _success () {
+        clearInterval(interval)
+        return resolve()
+      }
+
+      // on fail:
+      // 1. build fail message
+      // 2. clear interval
+      // 3. return rejected promise with failed message
+      function _failure (msg) {
+        const fullMsg = logPrefix + ' Failed' + (msg ? ': ' + msg : '')
+        clearInterval(interval)
+        return reject(new Error(fullMsg))
+      }
+
+      function _processChangeSet (data) {
+        if (!displayedChangeSet[data.Status]) {
+          log(sprintf('[%s] %s:  %s',
+            chalk.gray(moment(data.LastUpdatedTimestamp).format('HH:mm:ss')),
+            `ChangeSet ${chalk.cyan(data.ChangeSetName)}`,
+            chalk[colorMap[data.Status]](data.Status)
+          ))
+        }
+
+        displayedChangeSet[data.status] = true
+
+        // if cf stack status indicates failure AND the failed event occurred during this update, notify of failure
+        // if cf stack status indicates success, OR it failed before this current update, notify of success
+        if (data.Status === 'CREATE_COMPLETE') {
+          _success()
+        } else if (data.Status === 'FAILED') {
+          _failure()
+        }
+
+        running = false
+      }
+
+      // provides all pagination
+      function getChangeSet (stackName, changeSetName) {
+        let next
+
+        function getChangeSets () {
+          return cf.describeChangeSet({
+            StackName: stackName,
+            ChangeSetName: changeSetName,
+            NextToken: next
+          })
+            .promise()
+            .then(function (data) {
+              next = (data || {}).NextToken
+              return !next ? Promise.resolve(data) : getChangeSets()
+            })
+        }
+        return getChangeSets().then(function (data) {
+          return data
+        })
+      }
+
+      interval = setInterval(function () {
+        let changeSetData
+
+        if (running) {
+          return
+        }
+        running = true
+
+        return getChangeSet(name, changeSetName)
+          .then(function (data) {
+            changeSetData = data
+            running = false
+
+            return _processChangeSet(changeSetData)
+          }).catch(function (err) {
+            // if stack does not exist, notify success
+            if (err && notExists.test(err)) {
+              return _success()
+            }
+            // if throttling has occurred, process events again
+            if (err && throttling.test(err)) {
+              return _processChangeSet(changeSetData)
+            }
+            // otherwise, notify of failure
+            if (err) {
+              return _failure(err)
+            }
+          })
+      }, checkStackInterval)
+    })
+  }
+
   function processCfStack (action, cfparms) {
     startedAt = Date.now()
-    if (action === 'update') {
-      return cf.updateStack(cfparms).promise()
-                .catch(function (err) {
-                  if (!/No updates are to be performed/.test(err)) {
-                    throw err
-                  }
-                })
-    }
-    return cf.createStack(cfparms).promise()
+
+    return cf.createChangeSet(cfparms).promise()
+              .catch(function (err) {
+                if (!/No changes are to be performed/.test(err)) {
+                  throw err
+                }
+              })
   }
 
   function loadJs (path) {
@@ -335,13 +436,29 @@ function Cfn (name, template) {
   }
 
   function processStack (action, name, template) {
+    const curr = new Date()
+    const currTime = curr.getTime()
+    const changeSetName = `${name}-${currTime}`
     return processTemplate(template)
             .then(function (data) {
               return processCfStack(action, merge({
                 StackName: name,
+                ChangeSetName: changeSetName,
+                ChangeSetType: action.toUpperCase(),
                 Capabilities: capabilities,
                 Parameters: convertParams(cfParams)
               }, templateObject(data)))
+            })
+            .then((data) => {
+              return checkChangeStack(action, name, changeSetName)
+            })
+            .then((data) => {
+              return cf.executeChangeSet({StackName: name, ChangeSetName: changeSetName}).promise()
+                .catch(function (err) {
+                  if (!/No change set are to be executed/.test(err)) {
+                    throw err
+                  }
+                })
             })
             .then(function () {
               return async ? Promise.resolve() : checkStack(action, name)
