@@ -59,6 +59,8 @@ const colorMap = {
   DELETE_IN_PROGRESS: 'gray',
   DELETE_COMPLETE: 'green',
   DELETE_FAILED: 'red',
+  REVIEW_IN_PROGRESS: 'gray',
+  REVIEW_COMPLETE: 'green',
   ROLLBACK_FAILED: 'red',
   ROLLBACK_IN_PROGRESS: 'yellow',
   ROLLBACK_COMPLETE: 'red',
