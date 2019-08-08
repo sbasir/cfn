@@ -59,6 +59,7 @@ const colorMap = {
   DELETE_IN_PROGRESS: 'gray',
   DELETE_COMPLETE: 'green',
   DELETE_FAILED: 'red',
+  FAILED: 'red',
   REVIEW_IN_PROGRESS: 'gray',
   REVIEW_COMPLETE: 'green',
   ROLLBACK_FAILED: 'red',
@@ -275,10 +276,11 @@ function Cfn (name, template) {
 
         // if cf stack status indicates failure AND the failed event occurred during this update, notify of failure
         // if cf stack status indicates success, OR it failed before this current update, notify of success
+
         if (data.Status === 'CREATE_COMPLETE') {
           _success()
         } else if (data.Status === 'FAILED') {
-          _failure()
+          _failure(data.StatusReason)
         }
 
         running = false
