@@ -42,7 +42,8 @@ const failed = [
   'UPDATE_ROLLBACK_IN_PROGRESS',
   'UPDATE_ROLLBACK_COMPLETE',
   'UPDATE_FAILED',
-  'DELETE_FAILED'
+  'DELETE_FAILED',
+  'FAILED'
 ]
 
 const exists = [
@@ -59,9 +60,9 @@ const colorMap = {
   DELETE_IN_PROGRESS: 'gray',
   DELETE_COMPLETE: 'green',
   DELETE_FAILED: 'red',
-  FAILED: 'red',
   REVIEW_IN_PROGRESS: 'gray',
   REVIEW_COMPLETE: 'green',
+  FAILED: 'red',
   ROLLBACK_FAILED: 'red',
   ROLLBACK_IN_PROGRESS: 'yellow',
   ROLLBACK_COMPLETE: 'red',
@@ -137,7 +138,11 @@ function Cfn (name, template) {
       function _failure (msg) {
         const fullMsg = logPrefix + ' Failed' + (msg ? ': ' + msg : '')
         clearInterval(interval)
-        return reject(new Error(fullMsg))
+        if (msg) {
+          return reject(fullMsg)
+        } else {
+          return reject(new Error(fullMsg))
+        }
       }
 
       function _processEvents (events) {
@@ -276,7 +281,6 @@ function Cfn (name, template) {
 
         // if cf stack status indicates failure AND the failed event occurred during this update, notify of failure
         // if cf stack status indicates success, OR it failed before this current update, notify of success
-
         if (data.Status === 'CREATE_COMPLETE') {
           _success()
         } else if (data.Status === 'FAILED') {
