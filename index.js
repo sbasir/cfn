@@ -94,6 +94,7 @@ function Cfn (name, template) {
   let cfParams = opts.cfParams || {}
   let awsConfig = opts.awsConfig
   let capabilities = opts.capabilities || ['CAPABILITY_IAM']
+  let roleArn = opts.roleArn
   let awsOpts = {}
   let async = opts.async
   let checkStackInterval = opts.checkStackInterval || _config.checkStackInterval
@@ -449,13 +450,20 @@ function Cfn (name, template) {
     const changeSetName = `${name}-${currTime}`
     return processTemplate(template)
             .then(function (data) {
-              return processCfStack(action, merge({
+              let cfp = merge({
                 StackName: name,
                 ChangeSetName: changeSetName,
                 ChangeSetType: action.toUpperCase(),
                 Capabilities: capabilities,
                 Parameters: convertParams(cfParams)
-              }, templateObject(data)))
+              }, templateObject(data))
+
+              if (roleArn != null) {
+                cfp = merge({
+                  RoleARN: roleArn
+                }, cfp)
+              }
+              return processCfStack(action, cfp)
             })
             .then((data) => {
               return checkChangeStack(action, name, changeSetName)
@@ -492,7 +500,14 @@ function Cfn (name, template) {
 
   this.delete = function (overrideName) {
     startedAt = Date.now()
-    return cf.deleteStack({ StackName: overrideName || name }).promise()
+    let cfp = { StackName: overrideName || name }
+    if (roleArn != null) {
+      cfp = merge({
+        RoleARN: roleArn
+      }, cfp)
+    }
+
+    return cf.deleteStack(cfp).promise()
             .then(function () {
               return async ? Promise.resolve() : checkStack('delete', overrideName || name)
             })
