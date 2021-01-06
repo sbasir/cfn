@@ -245,6 +245,7 @@ function Cfn (name, template) {
     const logPrefix = name + ' ' + action.toUpperCase()
     const notExists = /ValidationError:\s+Stack\s+\[?.+]?\s+does not exist/
     const throttling = /Throttling:\s+Rate\s+exceeded/
+    const noChanges = /The submitted information didn\'t contain changes/
     let displayedChangeSet = {}
 
     return new Promise(function (resolve, reject) {
@@ -266,6 +267,9 @@ function Cfn (name, template) {
       function _failure (msg) {
         const fullMsg = logPrefix + ' Failed' + (msg ? ': ' + msg : '')
         clearInterval(interval)
+        if (noChanges.test(msg)) {
+          return reject(fullMsg)
+        }
         return reject(new Error(fullMsg))
       }
 
